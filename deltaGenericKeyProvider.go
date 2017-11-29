@@ -28,11 +28,11 @@ func startServer() {
 		middleware.ResourceType{
 			Path:    "/getKeyAndIv",
 			Method:  "GET",
-			Handler: getKeyAndIv(sendGenericResponse(http.HandlerFunc(final)))},
+			Handler: getKeyAndIv(middleware.IsRequestValid(sendGenericResponse(http.HandlerFunc(final))))},
 		middleware.ResourceType{
 			Path:    "/speke/v1.0/copyProtection",
 			Method:  "POST",
-			Handler: getKeyAndIv(sendSpekeResponse(http.HandlerFunc(final)))}}
+			Handler: getKeyAndIv(middleware.IsRequestValid(sendSpekeResponse(http.HandlerFunc(final))))}}
 
 	config := middleware.ConfigType{Port: 8080, Path: "/delta", Resources: resource}
 
