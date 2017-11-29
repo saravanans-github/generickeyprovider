@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/xml"
 	"helper/encode"
 	"io/ioutil"
 	"log"
@@ -13,10 +14,23 @@ const _KEY = "a674a66870be1eba1fee7adb3f3dd37f"
 const _IV = "1f408836a6e7c0295bbad005a71a5532"
 const _URI = "sdk://test123"
 const _SPEKE_UA = "ssaravanan_generickeyprovider"
+const _CPIX_URN = "urn:dashif:org:cpix"
+const _PSKC_URN = "urn:ietf:params:xml:ns:keyprov:pskc"
+const _SPEKE_URN = "urn:aws:amazon:com:speke"
 
 type SpekeResponseType struct {
-	Cpix   string `xml:"license"`
-	Status string `json:"status"`
+	XMLName        xml.Name         `xml:"cpix:CPIX"`
+	Id             string           `xml:"id,attr"`
+	Cpix           string           `xml:"xmlns:cpix,attr"`
+	Pskc           string           `xml:"xmlns:pskc,attr"`
+	Speke          string           `xml:"xmlns:speke,attr"`
+	ContentKeyList []ContentKeyType `xml:"cpix:ContentKeyList>cpix:ContentKey"`
+}
+
+type ContentKeyType struct {
+	Kid        string `xml:"kid,attr"`
+	ExplicitIV string `xml:"explicitIV,attr"`
+	Data       string `xml:"cpix:Data>pskc:Secret>pskc:PlainValue"`
 }
 
 func main() {
@@ -99,12 +113,35 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		w.Header().Set("Speke-User-Agent", _SPEKE_UA)
 		log.Println("Writing response headers... DONE")
 
+		log.Println("Creating Static Speke XML body...")
+		response, err := buildStaticSpekeResponse()
+		if err != nil {
+			log.Panicf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
+		}
+		log.Println("Creating Static Speke XML body... DONE")
+
 		log.Println("Writing response body...")
-		if _, err := w.Write(encode.HexStringToBin(_KEY + _IV)); err != nil {
+		if _, err := w.Write(response); err != nil {
 			log.Panicf("Writing response body... FAILED \n [%s]", err.Error())
 		}
 		log.Println("Writing response body... DONE")
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func buildStaticSpekeResponse() ([]byte, error) {
+	//5dGAgwGuUYu4dHeHtNlxJw==
+	spekeResponse, err := xml.Marshal(SpekeResponseType{Id: "123", Cpix: "abc", Pskc: "123", Speke: "123",
+		ContentKeyList: []ContentKeyType{
+			ContentKeyType{
+				Kid:        "b4453f69-75ef-415b-9160-1ca699013871",
+				ExplicitIV: "5dGAgwGuUYu4dHeHtNlxJw==",
+				Data:       "5dGAgwGuUYu4dHeHtNlxJw=="}}})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return spekeResponse, nil
 }
