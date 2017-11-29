@@ -25,12 +25,21 @@ type SpekeResponseType struct {
 	Pskc           string           `xml:"xmlns:pskc,attr"`
 	Speke          string           `xml:"xmlns:speke,attr"`
 	ContentKeyList []ContentKeyType `xml:"cpix:ContentKeyList>cpix:ContentKey"`
+	DRMSystemList  []DRMSystemType  `xml:"cpix:DRMSystemList>cpix:DRMSystem,omitempty"`
 }
 
 type ContentKeyType struct {
 	Kid        string `xml:"kid,attr"`
 	ExplicitIV string `xml:"explicitIV,attr"`
 	Data       string `xml:"cpix:Data>pskc:Secret>pskc:PlainValue"`
+}
+
+type DRMSystemType struct {
+	Kid               string `xml:"kid,attr"`
+	SystemId          string `xml:"systemId,attr"`
+	URIExtXKey        string `xml:"cpix:URIExtXKey,omitempty"`
+	KeyFormat         string `xml:"speke:KeyFormat,omitempty"`
+	KeyFormatVersions string `xml:"speke:KeyFormatVersions,omitempty"`
 }
 
 func main() {
@@ -137,7 +146,14 @@ func buildStaticSpekeResponse() ([]byte, error) {
 			ContentKeyType{
 				Kid:        "b4453f69-75ef-415b-9160-1ca699013871",
 				ExplicitIV: "5dGAgwGuUYu4dHeHtNlxJw==",
-				Data:       "5dGAgwGuUYu4dHeHtNlxJw=="}}})
+				Data:       "5dGAgwGuUYu4dHeHtNlxJw=="}},
+		DRMSystemList: []DRMSystemType{
+			DRMSystemType{
+				Kid:               "b4453f69-75ef-415b-9160-1ca699013871",
+				SystemId:          "98ee5596-cd3e-a20d-163a-e382420c6eff",
+				URIExtXKey:        "aHR0cHM6Ly83azR5dHV4cTVkLmV4ZWN1dGUtYXBpLnVzLXdlc3QtMi5hbWF6b25hd3MuY29tL0VrZVN0YWdlL2NsaWVudC9hYmMxMjMvOThlZTU1OTYtY2QzZS1hMjBkLTE2M2EtZTM4MjQyMGM2ZWZm",
+				KeyFormat:         "Y29tLmFwcGxlLnN0cmVhbWluZ2tleWRlbGl2ZXJ5",
+				KeyFormatVersions: "MQ=="}}})
 
 	if err != nil {
 		return nil, err
