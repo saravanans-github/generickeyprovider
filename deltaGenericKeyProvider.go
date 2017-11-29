@@ -7,7 +7,6 @@ import (
 	"log"
 	"middleware"
 	"net/http"
-	"net/http/httputil"
 )
 
 const _KEY = "a674a66870be1eba1fee7adb3f3dd37f"
@@ -17,8 +16,21 @@ const _SPEKE_UA = "ssaravanan_generickeyprovider"
 const _CPIX_URN = "urn:dashif:org:cpix"
 const _PSKC_URN = "urn:ietf:params:xml:ns:keyprov:pskc"
 const _SPEKE_URN = "urn:aws:amazon:com:speke"
+const _FAIRPLAY_URIEXTXKEY = "skd://thisIsNotNeededForFairPlay"
+const _FAIRPLAY_KEYFORMAT = "com.apple.streamingkeydelivery"
+const _FAIRPLAY_KEYFORMATVERSIONS = "1"
 
-type SpekeResponseType struct {
+type CpixRequestType struct {
+	XMLName        xml.Name         `xml:"CPIX"`
+	Id             string           `xml:"id,attr"`
+	Cpix           string           `xml:"xmlns:cpix,attr"`
+	Pskc           string           `xml:"xmlns:pskc,attr"`
+	Speke          string           `xml:"xmlns:speke,attr"`
+	ContentKeyList []ContentKeyType `xml:"ContentKeyList>ContentKey"`
+	DRMSystemList  []DRMSystemType  `xml:"DRMSystemList>DRMSystem,omitempty"`
+}
+
+type CpixResponseType struct {
 	XMLName        xml.Name         `xml:"cpix:CPIX"`
 	Id             string           `xml:"id,attr"`
 	Cpix           string           `xml:"xmlns:cpix,attr"`
@@ -70,14 +82,16 @@ func getKeyAndIv(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// TURN THIS ON/OFF TO ENABLE/DISABLE HTTP DEBUGGING
-		dump, err := httputil.DumpRequest(r, true)
-		if err != nil {
-			log.Fatalln(err)
-			message, status := middleware.GetErrorResponse(500, "Server unable to read body.")
-			http.Error(w, message, status)
-		}
+		/*
+			dump, err := httputil.DumpRequest(r, true)
+			if err != nil {
+				log.Fatalln(err)
+				message, status := middleware.GetErrorResponse(500, "Server unable to read body.")
+				http.Error(w, message, status)
+			}
 
-		log.Printf("%q", dump)
+			log.Printf("%q", dump)
+		*/
 
 		next.ServeHTTP(w, r)
 	})
@@ -85,6 +99,7 @@ func getKeyAndIv(next http.Handler) http.Handler {
 
 func sendGenericResponse(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		log.Println("Writing response headers...")
 		log.Println("	ContentType header set")
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -115,6 +130,15 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 			http.Error(w, message, status)
 		}
 
+		log.Println(string(body))
+		log.Println("Marshalling request into XML object...")
+		var requestInXML CpixRequestType
+		err = xml.Unmarshal(body, &requestInXML)
+		if err != nil {
+			log.Fatalf("Marshalling request into XML object... FAILED [%s]", err.Error())
+		}
+		log.Println("Marshalling request into XML object... DONE")
+
 		log.Println("Writing response headers...")
 		log.Println("	ContentType header set")
 		w.Header().Set("Content-Type", "application/xml")
@@ -123,7 +147,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		log.Println("Writing response headers... DONE")
 
 		log.Println("Creating Static Speke XML body...")
-		response, err := buildStaticSpekeResponse()
+		response, err := buildStaticSpekeResponse(requestInXML.Id, requestInXML.ContentKeyList, requestInXML.DRMSystemList)
 		if err != nil {
 			log.Panicf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
 		}
@@ -139,21 +163,37 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 	})
 }
 
-func buildStaticSpekeResponse() ([]byte, error) {
-	//5dGAgwGuUYu4dHeHtNlxJw==
-	spekeResponse, err := xml.Marshal(SpekeResponseType{Id: "123", Cpix: "abc", Pskc: "123", Speke: "123",
-		ContentKeyList: []ContentKeyType{
-			ContentKeyType{
-				Kid:        "b4453f69-75ef-415b-9160-1ca699013871",
-				ExplicitIV: "5dGAgwGuUYu4dHeHtNlxJw==",
-				Data:       "5dGAgwGuUYu4dHeHtNlxJw=="}},
-		DRMSystemList: []DRMSystemType{
-			DRMSystemType{
-				Kid:               "b4453f69-75ef-415b-9160-1ca699013871",
-				SystemId:          "98ee5596-cd3e-a20d-163a-e382420c6eff",
-				URIExtXKey:        "aHR0cHM6Ly83azR5dHV4cTVkLmV4ZWN1dGUtYXBpLnVzLXdlc3QtMi5hbWF6b25hd3MuY29tL0VrZVN0YWdlL2NsaWVudC9hYmMxMjMvOThlZTU1OTYtY2QzZS1hMjBkLTE2M2EtZTM4MjQyMGM2ZWZm",
-				KeyFormat:         "Y29tLmFwcGxlLnN0cmVhbWluZ2tleWRlbGl2ZXJ5",
-				KeyFormatVersions: "MQ=="}}})
+func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystems []DRMSystemType) ([]byte, error) {
+
+	var resContentKeys = make([]ContentKeyType, len(contentKeys))
+
+	// Set the same static key & iv for each kid in the request
+	// Ideally we will want to create a different key and iv for every different kid
+	log.Printf("length of content keys %d", len(contentKeys))
+	for i := 0; i < len(contentKeys); i++ {
+		resContentKeys[i].Kid = contentKeys[i].Kid
+		resContentKeys[i].Data = encode.BytesToBase64([]byte(_KEY))
+		resContentKeys[i].ExplicitIV = encode.BytesToBase64([]byte(_IV))
+	}
+
+	// Now we set DRM specific data statically
+	// Ideally we'll want to pull this of a config
+	var resDrmSystems = make([]DRMSystemType, len(drmSystems))
+
+	log.Printf("length of drm systems %d", len(drmSystems))
+	// Set the same static key & iv for each kid in the request
+	// Ideally we will want to create a different key and iv for every different kid
+	for i := 0; i < len(drmSystems); i++ {
+		resDrmSystems[i].Kid = drmSystems[i].Kid
+		resDrmSystems[i].SystemId = drmSystems[i].SystemId
+		resDrmSystems[i].URIExtXKey = encode.BytesToBase64([]byte(_FAIRPLAY_URIEXTXKEY))
+		resDrmSystems[i].KeyFormat = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMAT))
+		resDrmSystems[i].KeyFormatVersions = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMATVERSIONS))
+	}
+
+	spekeResponse, err := xml.Marshal(CpixResponseType{Id: id, Cpix: _CPIX_URN, Pskc: _PSKC_URN, Speke: _SPEKE_URN,
+		ContentKeyList: resContentKeys,
+		DRMSystemList:  resDrmSystems})
 
 	if err != nil {
 		return nil, err
