@@ -14,6 +14,11 @@ const _IV = "1f408836a6e7c0295bbad005a71a5532"
 const _URI = "sdk://test123"
 const _SPEKE_UA = "ssaravanan_generickeyprovider"
 
+type SpekeResponseType struct {
+	Cpix   string `xml:"license"`
+	Status string `json:"status"`
+}
+
 func main() {
 	startServer()
 }
@@ -25,7 +30,7 @@ func startServer() {
 			Method:  "GET",
 			Handler: getKeyAndIv(sendGenericResponse(http.HandlerFunc(final)))},
 		middleware.ResourceType{
-			Path:    "speke/v1.0/copyProtection",
+			Path:    "/speke/v1.0/copyProtection",
 			Method:  "POST",
 			Handler: getKeyAndIv(sendSpekeResponse(http.HandlerFunc(final)))}}
 
@@ -40,6 +45,8 @@ func final(w http.ResponseWriter, r *http.Request) {
 
 func getKeyAndIv(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// TURN THIS ON/OFF TO ENABLE/DISABLE HTTP DEBUGGING
 		dump, err := httputil.DumpRequest(r, true)
 		if err != nil {
 			log.Fatalln(err)
@@ -48,6 +55,7 @@ func getKeyAndIv(next http.Handler) http.Handler {
 		}
 
 		log.Printf("%q", dump)
+
 		next.ServeHTTP(w, r)
 	})
 }
