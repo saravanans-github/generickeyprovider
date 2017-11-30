@@ -236,6 +236,8 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 		return nil, err
 	}
 
+	log.Printf("XML response: %q", spekeResponse)
+
 	return spekeResponse, nil
 }
 
