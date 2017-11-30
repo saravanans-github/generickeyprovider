@@ -1,12 +1,15 @@
 package main
 
 import (
+	pb "WidevineCencHeader"
 	"encoding/xml"
 	"helper/encode"
 	"io/ioutil"
 	"log"
 	"middleware"
 	"net/http"
+
+	"github.com/golang/protobuf/proto"
 )
 
 const _KEY = "a674a66870be1eba1fee7adb3f3dd37f"
@@ -19,6 +22,14 @@ const _SPEKE_URN = "urn:aws:amazon:com:speke"
 const _FAIRPLAY_URIEXTXKEY = "skd://thisIsNotNeededForFairPlay"
 const _FAIRPLAY_KEYFORMAT = "com.apple.streamingkeydelivery"
 const _FAIRPLAY_KEYFORMATVERSIONS = "1"
+
+const _FAIRPLAY_SYSTEM_ID = "98ee5596-cd3e-a20d-163a-e382420c6eff"
+const _WIDEVINE_SYSTEM_ID = "edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"
+const _PLAYREADY_SYSTEM_ID = "9a04f079-9840-4286-ab92-e65be0885f95"
+const _CENC_SYSTEM_ID = ""
+
+const _WIDEVINE_PROVIDER = "widevine_test"
+const _WIDEVINE_TRACKTYPE = "SD"
 
 type CpixRequestType struct {
 	XMLName        xml.Name         `xml:"CPIX"`
@@ -52,7 +63,11 @@ type DRMSystemType struct {
 	URIExtXKey        string `xml:"cpix:URIExtXKey,omitempty"`
 	KeyFormat         string `xml:"speke:KeyFormat,omitempty"`
 	KeyFormatVersions string `xml:"speke:KeyFormatVersions,omitempty"`
+	Pssh              string `xml:"cpix:PSSH,omitempty"`
+	ProtectionHeader  string `xml:"speke:ProtectionHeader,omitempty"`
 }
+
+type empty struct{}
 
 func main() {
 	startServer()
@@ -178,17 +193,39 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 
 	// Now we set DRM specific data statically
 	// Ideally we'll want to pull this of a config
-	var resDrmSystems = make([]DRMSystemType, len(drmSystems))
+	len := len(drmSystems)
+	resDrmSystems := make([]DRMSystemType, len)
+	sem := make(chan empty, len) // semaphore pattern
 
-	log.Printf("length of drm systems %d", len(drmSystems))
-	// Set the same static key & iv for each kid in the request
-	// Ideally we will want to create a different key and iv for every different kid
-	for i := 0; i < len(drmSystems); i++ {
-		resDrmSystems[i].Kid = drmSystems[i].Kid
-		resDrmSystems[i].SystemId = drmSystems[i].SystemId
-		resDrmSystems[i].URIExtXKey = encode.BytesToBase64([]byte(_FAIRPLAY_URIEXTXKEY))
-		resDrmSystems[i].KeyFormat = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMAT))
-		resDrmSystems[i].KeyFormatVersions = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMATVERSIONS))
+	// Here we use the semaphore pattern to parallelize the response for each drm system
+	for i, drmSystem := range drmSystems {
+		go func(i int, drmSystem DRMSystemType) {
+			log.Println(drmSystem.SystemId)
+			switch drmSystem.SystemId {
+			case _FAIRPLAY_SYSTEM_ID:
+				resDrmSystems[i].URIExtXKey = encode.BytesToBase64([]byte(_FAIRPLAY_URIEXTXKEY))
+				resDrmSystems[i].KeyFormat = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMAT))
+				resDrmSystems[i].KeyFormatVersions = encode.BytesToBase64([]byte(_FAIRPLAY_KEYFORMATVERSIONS))
+				break
+			case _WIDEVINE_SYSTEM_ID:
+				// TODO: implement proper (HTTP) error handling
+				data, err := generateProtoBuf([]byte(drmSystem.Kid), []byte(id), _WIDEVINE_PROVIDER, _WIDEVINE_TRACKTYPE)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				resDrmSystems[i].Pssh = encode.BytesToBase64(data)
+				break
+			}
+			resDrmSystems[i].Kid = drmSystems[i].Kid
+			resDrmSystems[i].SystemId = drmSystems[i].SystemId
+
+			sem <- empty{}
+		}(i, drmSystem)
+	}
+	// wait for goroutines to finish
+	for i := 0; i < len; i++ {
+		<-sem
 	}
 
 	spekeResponse, err := xml.Marshal(CpixResponseType{Id: id, Cpix: _CPIX_URN, Pskc: _PSKC_URN, Speke: _SPEKE_URN,
@@ -200,4 +237,28 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 	}
 
 	return spekeResponse, nil
+}
+
+func generateProtoBuf(keyId []byte, contentId []byte, provider string, trackType string) ([]byte, error) {
+
+	key_id := [][]byte{keyId}
+	algorithm_value := pb.WidevineCencHeader_AESCTR
+	policy := string("")
+
+	pssh := &pb.WidevineCencHeader{
+		Algorithm:           &algorithm_value,
+		KeyId:               key_id,
+		Provider:            &provider,
+		ContentId:           contentId,
+		TrackTypeDeprecated: &trackType,
+		Policy:              &policy}
+
+	data, err := proto.Marshal(pssh)
+	if err != nil {
+		log.Fatal("marshaling error: ", err)
+
+		return nil, err
+	}
+
+	return data, nil
 }
