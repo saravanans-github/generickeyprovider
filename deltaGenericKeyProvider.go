@@ -149,7 +149,6 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 			return
 		}
 
-		log.Println(string(body))
 		log.Println("Marshalling request into XML object...")
 		var requestInXML CpixRequestType
 		err = xml.Unmarshal(body, &requestInXML)
@@ -246,8 +245,6 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 	if err != nil {
 		return nil, err
 	}
-
-	log.Printf("XML response: %q", spekeResponse)
 
 	return spekeResponse, nil
 }
