@@ -132,6 +132,8 @@ func sendGenericResponse(next http.Handler) http.Handler {
 
 func sendSpekeResponse(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer next.ServeHTTP(w, r)
+
 		log.Println("Reading request body...")
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -144,6 +146,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		if len(body) == 0 {
 			message, status := middleware.GetErrorResponse(404, "Bad request. Body is empty.")
 			http.Error(w, message, status)
+			return
 		}
 
 		log.Println(string(body))
@@ -154,6 +157,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 			log.Printf("Marshalling request into XML object... FAILED [%s]", err.Error())
 			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
 			http.Error(w, message, status)
+			return
 		}
 		log.Println("Marshalling request into XML object... DONE")
 
@@ -167,17 +171,21 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		log.Println("Creating Static Speke XML body...")
 		response, err := buildStaticSpekeResponse(requestInXML.Id, requestInXML.ContentKeyList, requestInXML.DRMSystemList)
 		if err != nil {
-			log.Panicf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
+			log.Printf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
+			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			http.Error(w, message, status)
+			return
 		}
 		log.Println("Creating Static Speke XML body... DONE")
 
 		log.Println("Writing response body...")
 		if _, err := w.Write(response); err != nil {
-			log.Panicf("Writing response body... FAILED \n [%s]", err.Error())
+			log.Printf("Writing response body... FAILED \n [%s]", err.Error())
+			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			http.Error(w, message, status)
+			return
 		}
 		log.Println("Writing response body... DONE")
-
-		next.ServeHTTP(w, r)
 	})
 }
 
