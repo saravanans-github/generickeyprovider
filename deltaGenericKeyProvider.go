@@ -132,16 +132,17 @@ func sendGenericResponse(next http.Handler) http.Handler {
 
 func sendSpekeResponse(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Reading request body...")
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Fatal(err)
-			message, status := middleware.GetErrorResponse(500, "Server unable to read body.")
+			log.Printf("Reading request body... FAILED [%s]", err.Error())
+			message, status := middleware.GetErrorResponse(500, "Server unable to read body. "+err.Error())
 			http.Error(w, message, status)
 		}
 		ioutil.NopCloser(r.Body)
 
 		if len(body) == 0 {
-			message, status := middleware.GetErrorResponse(404, "Bad request.")
+			message, status := middleware.GetErrorResponse(404, "Bad request. Body is empty.")
 			http.Error(w, message, status)
 		}
 
@@ -150,7 +151,9 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		var requestInXML CpixRequestType
 		err = xml.Unmarshal(body, &requestInXML)
 		if err != nil {
-			log.Fatalf("Marshalling request into XML object... FAILED [%s]", err.Error())
+			log.Printf("Marshalling request into XML object... FAILED [%s]", err.Error())
+			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			http.Error(w, message, status)
 		}
 		log.Println("Marshalling request into XML object... DONE")
 
