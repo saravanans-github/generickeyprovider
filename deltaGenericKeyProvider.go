@@ -144,7 +144,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		ioutil.NopCloser(r.Body)
 
 		if len(body) == 0 {
-			message, status := middleware.GetErrorResponse(404, "Bad request. Body is empty.")
+			message, status := middleware.GetErrorResponse(400, "Bad request. Body is empty.")
 			http.Error(w, message, status)
 			return
 		}
@@ -155,7 +155,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		err = xml.Unmarshal(body, &requestInXML)
 		if err != nil {
 			log.Printf("Marshalling request into XML object... FAILED [%s]", err.Error())
-			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			message, status := middleware.GetErrorResponse(400, "Bad request. "+err.Error())
 			http.Error(w, message, status)
 			return
 		}
@@ -172,7 +172,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		response, err := buildStaticSpekeResponse(requestInXML.Id, requestInXML.ContentKeyList, requestInXML.DRMSystemList)
 		if err != nil {
 			log.Printf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
-			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			message, status := middleware.GetErrorResponse(400, "Bad request. "+err.Error())
 			http.Error(w, message, status)
 			return
 		}
@@ -181,7 +181,7 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		log.Println("Writing response body...")
 		if _, err := w.Write(response); err != nil {
 			log.Printf("Writing response body... FAILED \n [%s]", err.Error())
-			message, status := middleware.GetErrorResponse(500, "Bad request. "+err.Error())
+			message, status := middleware.GetErrorResponse(400, "Bad request. "+err.Error())
 			http.Error(w, message, status)
 			return
 		}
