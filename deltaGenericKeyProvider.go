@@ -10,7 +10,7 @@ import (
 	"middleware"
 	"net/http"
 	"strings"
-
+	"net/http/httputil"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -99,7 +99,7 @@ func getKeyAndIv(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// TURN THIS ON/OFF TO ENABLE/DISABLE HTTP DEBUGGING
-		/*
+		
 			dump, err := httputil.DumpRequest(r, true)
 			if err != nil {
 				log.Fatalln(err)
@@ -108,7 +108,7 @@ func getKeyAndIv(next http.Handler) http.Handler {
 			}
 
 			log.Printf("%q", dump)
-		*/
+		
 
 		next.ServeHTTP(w, r)
 	})
@@ -205,9 +205,9 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 
 	// Now we set DRM specific data statically
 	// Ideally we'll want to pull this of a config
-	len := len(drmSystems)
-	resDrmSystems := make([]DRMSystemType, len)
-	sem := make(chan empty, len) // semaphore pattern
+	length := len(drmSystems)
+	resDrmSystems := make([]DRMSystemType, length)
+	sem := make(chan empty, length) // semaphore pattern
 
 	// Here we use the semaphore pattern to parallelize the response for each drm system
 	for i, drmSystem := range drmSystems {
@@ -223,7 +223,7 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 				// TODO: implement proper (HTTP) error handling
 
 				contentIdInBin := []byte(id)
-				contentKeyInBin := [][]byte{}
+				contentKeyInBin := make([][]byte, len(contentKeys)) 
 
 				for i, contentKey := range contentKeys {
 					contentKeyInBin[i] = encode.HexStringToBin(strings.Replace(contentKey.Kid, "-", "", -1))
@@ -249,7 +249,7 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 		}(i, drmSystem)
 	}
 	// wait for goroutines to finish
-	for i := 0; i < len; i++ {
+	for i := 0; i < length; i++ {
 		<-sem
 	}
 
