@@ -3,11 +3,13 @@ package main
 import (
 	pb "WidevineCencHeader"
 	"encoding/xml"
+	"errors"
 	"helper/encode"
 	"io/ioutil"
 	"log"
 	"middleware"
 	"net/http"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -220,20 +222,20 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 			case _WIDEVINE_SYSTEM_ID:
 				// TODO: implement proper (HTTP) error handling
 
-				data, _ := generateProtoBuf(encode.HexStringToBin("eee405eddea64f378e51ec167eca8d33"), encode.HexStringToBin("74657374313233"), "widevine_test", "SD")
-				pssh := []byte{
-					0x00, 0x00, 0x00, 0x5e, 0x70, 0x73, 0x73, 0x68, // BMFF box header (68 bytes, 'pssh')
-					0x01, 0x00, 0x00, 0x00, // Full box header (version = 1, flags = 0)
-					0xed, 0xef, 0x8b, 0xa9, 0x79, 0xd6, 0x4a, 0xce, // Widevine SystemID
-					0xa3, 0xc8, 0x27, 0xdc, 0xd5, 0x1d, 0x21, 0xed,
-					0x00, 0x00, 0x00, 0x01, // KID_count (1)
-					0xee, 0xe4, 0x05, 0xed, 0xde, 0xa6, 0x4f, 0x37, // Key Id
-					0x8e, 0x51, 0xec, 0x16, 0x7e, 0xca, 0x8d, 0x33,
-					0x00, 0x00, 0x00, 0x2a}
+				contentIdInBin := []byte(id)
+				contentKeyInBin := encode.HexStringToBin(strings.Replace(contentKeys[0].Kid, "-", "", -1))
 
-				pssh = append(pssh, data...)
+				widevinePssh, err := generateWidevinePssh(contentKeyInBin, contentIdInBin, "widevine_test", "SD")
+				if err != nil {
+					return
+				}
 
-				resDrmSystems[i].Pssh = encode.BytesToBase64(pssh)
+				mp4Pssh, err := generateMp4Pssh(contentKeyInBin, strings.Replace(_WIDEVINE_SYSTEM_ID, "-", "", -1), widevinePssh)
+				if err != nil {
+					return
+				}
+
+				resDrmSystems[i].Pssh = encode.BytesToBase64(mp4Pssh)
 				break
 			}
 			resDrmSystems[i].Kid = drmSystems[i].Kid
@@ -258,7 +260,7 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 	return spekeResponse, nil
 }
 
-func generateProtoBuf(keyId []byte, contentId []byte, provider string, trackType string) ([]byte, error) {
+func generateWidevinePssh(keyId []byte, contentId []byte, provider string, trackType string) ([]byte, error) {
 
 	key_id := [][]byte{keyId}
 
@@ -275,4 +277,56 @@ func generateProtoBuf(keyId []byte, contentId []byte, provider string, trackType
 	}
 
 	return data, nil
+}
+
+// generateMp4Pssh creates an version 1 MP4 Pssh per the https://www.w3.org/TR/eme-initdata-cenc/#common-system
+// NOTE: this function currently does not support multiple key id.
+func generateMp4Pssh(keyIdInBin []byte, systemId string, drmPsshInBin []byte) ([]byte, error) {
+
+	boxSizeInBoxHeader := make([]byte, 4)
+	psshInBoxHeader := []byte{0x70, 0x73, 0x73, 0x68} // 'pssh'
+	versionAndFlags := []byte{0x01, 0x00, 0x00, 0x00} // Full box header (version = 1, flags = 0)
+	systemIdInBin := encode.HexStringToBin(systemId)
+
+	keyIdCountInBin := make([]byte, 4)
+	// TODO: enable multiple key PSSH
+	keyCount := 1
+	// Convert the key count to 4 bytes
+	keyIdCountInBin[0] = byte(keyCount >> 24)
+	keyIdCountInBin[1] = byte(keyCount >> 16)
+	keyIdCountInBin[2] = byte(keyCount >> 8)
+	keyIdCountInBin[3] = byte(keyCount)
+
+	// ensure the key id is 16 bytes else return error
+	if len(keyIdInBin) != 16 {
+		err := errors.New("Invalid key id")
+		return nil, err
+	}
+
+	sizeOfDrmPssh := len(drmPsshInBin)
+	sizeOfDrmPsshInBin := make([]byte, 4)
+	// Convert the drm pssh size to 4 bytes
+	sizeOfDrmPsshInBin[0] = byte(sizeOfDrmPssh >> 24)
+	sizeOfDrmPsshInBin[1] = byte(sizeOfDrmPssh >> 16)
+	sizeOfDrmPsshInBin[2] = byte(sizeOfDrmPssh >> 8)
+	sizeOfDrmPsshInBin[3] = byte(sizeOfDrmPssh)
+
+	pssh := []byte{}
+	pssh = append(pssh, boxSizeInBoxHeader...)
+	pssh = append(pssh, psshInBoxHeader...)
+	pssh = append(pssh, versionAndFlags...)
+	pssh = append(pssh, systemIdInBin...)
+	pssh = append(pssh, keyIdCountInBin...)
+	pssh = append(pssh, keyIdInBin...)
+	pssh = append(pssh, sizeOfDrmPsshInBin...)
+	pssh = append(pssh, drmPsshInBin...)
+
+	sizeOfPssh := len(pssh)
+	// Convert the drm pssh size to 4 bytes
+	pssh[0] = byte(sizeOfPssh >> 24)
+	pssh[1] = byte(sizeOfPssh >> 16)
+	pssh[2] = byte(sizeOfPssh >> 8)
+	pssh[3] = byte(sizeOfPssh)
+
+	return pssh, nil
 }
