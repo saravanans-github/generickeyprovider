@@ -223,7 +223,11 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 				// TODO: implement proper (HTTP) error handling
 
 				contentIdInBin := []byte(id)
-				contentKeyInBin := encode.HexStringToBin(strings.Replace(contentKeys[0].Kid, "-", "", -1))
+				contentKeyInBin := [][]byte{}
+
+				for i, contentKey := range contentKeys {
+					contentKeyInBin[i] = encode.HexStringToBin(strings.Replace(contentKey.Kid, "-", "", -1))
+				}
 
 				widevinePssh, err := generateWidevinePssh(contentKeyInBin, contentIdInBin, "widevine_test", "SD")
 				if err != nil {
@@ -260,12 +264,10 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 	return spekeResponse, nil
 }
 
-func generateWidevinePssh(keyId []byte, contentId []byte, provider string, trackType string) ([]byte, error) {
-
-	key_id := [][]byte{keyId}
+func generateWidevinePssh(keyId [][]byte, contentId []byte, provider string, trackType string) ([]byte, error) {
 
 	pssh := &pb.WidevineCencHeader{
-		KeyId:     key_id,
+		KeyId:     keyId,
 		Provider:  &provider,
 		ContentId: contentId}
 
@@ -281,7 +283,7 @@ func generateWidevinePssh(keyId []byte, contentId []byte, provider string, track
 
 // generateMp4Pssh creates an version 1 MP4 Pssh per the https://www.w3.org/TR/eme-initdata-cenc/#common-system
 // NOTE: this function currently does not support multiple key id.
-func generateMp4Pssh(keyIdInBin []byte, systemId string, drmPsshInBin []byte) ([]byte, error) {
+func generateMp4Pssh(keyIdsInBin [][]byte, systemId string, drmPsshInBin []byte) ([]byte, error) {
 
 	boxSizeInBoxHeader := make([]byte, 4)
 	psshInBoxHeader := []byte{0x70, 0x73, 0x73, 0x68} // 'pssh'
@@ -290,7 +292,7 @@ func generateMp4Pssh(keyIdInBin []byte, systemId string, drmPsshInBin []byte) ([
 
 	keyIdCountInBin := make([]byte, 4)
 	// TODO: enable multiple key PSSH
-	keyCount := 1
+	keyCount := len(keyIdsInBin)
 	// Convert the key count to 4 bytes
 	keyIdCountInBin[0] = byte(keyCount >> 24)
 	keyIdCountInBin[1] = byte(keyCount >> 16)
@@ -298,9 +300,11 @@ func generateMp4Pssh(keyIdInBin []byte, systemId string, drmPsshInBin []byte) ([
 	keyIdCountInBin[3] = byte(keyCount)
 
 	// ensure the key id is 16 bytes else return error
-	if len(keyIdInBin) != 16 {
-		err := errors.New("Invalid key id")
-		return nil, err
+	for _, keyIdInBin := range keyIdsInBin {
+		if len(keyIdInBin) != 16 {
+			err := errors.New("Invalid key id")
+			return nil, err
+		}
 	}
 
 	sizeOfDrmPssh := len(drmPsshInBin)
@@ -317,7 +321,9 @@ func generateMp4Pssh(keyIdInBin []byte, systemId string, drmPsshInBin []byte) ([
 	pssh = append(pssh, versionAndFlags...)
 	pssh = append(pssh, systemIdInBin...)
 	pssh = append(pssh, keyIdCountInBin...)
-	pssh = append(pssh, keyIdInBin...)
+	for _, keyIdInBin := range keyIdsInBin {
+		pssh = append(pssh, keyIdInBin...)
+	}
 	pssh = append(pssh, sizeOfDrmPsshInBin...)
 	pssh = append(pssh, drmPsshInBin...)
 
