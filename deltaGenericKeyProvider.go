@@ -220,19 +220,20 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 			case _WIDEVINE_SYSTEM_ID:
 				// TODO: implement proper (HTTP) error handling
 
-				data := []byte{
-					0x00, 0x00, 0x00, 0x44, 0x70, 0x73, 0x73, 0x68, // BMFF box header (68 bytes, 'pssh')
+				data, _ := generateProtoBuf(encode.HexStringToBin("eee405eddea64f378e51ec167eca8d33"), encode.HexStringToBin("74657374313233"), "widevine_test", "SD")
+				pssh := []byte{
+					0x00, 0x00, 0x00, 0x5e, 0x70, 0x73, 0x73, 0x68, // BMFF box header (68 bytes, 'pssh')
 					0x01, 0x00, 0x00, 0x00, // Full box header (version = 1, flags = 0)
-					// 0x10, 0x77, 0xef, 0xec, 0xc0, 0xb2, 0x4d, 0x02, // SystemID
-					// 0xac, 0xe3, 0x3c, 0x1e, 0x52, 0xe2, 0xfb, 0x4b,
-					0xed, 0xef, 0x8b, 0xa9, 0x79, 0xd6, 0x4a, 0xce,
+					0xed, 0xef, 0x8b, 0xa9, 0x79, 0xd6, 0x4a, 0xce, // Widevine SystemID
 					0xa3, 0xc8, 0x27, 0xdc, 0xd5, 0x1d, 0x21, 0xed,
 					0x00, 0x00, 0x00, 0x01, // KID_count (1)
-					0xee, 0xe4, 0x05, 0xed, 0xde, 0xa6, 0x4f, 0x37,
+					0xee, 0xe4, 0x05, 0xed, 0xde, 0xa6, 0x4f, 0x37, // Key Id
 					0x8e, 0x51, 0xec, 0x16, 0x7e, 0xca, 0x8d, 0x33,
-					0x00, 0x00, 0x00, 0x00} // Size of Data (0)
+					0x00, 0x00, 0x00, 0x2a}
 
-				resDrmSystems[i].Pssh = encode.BytesToBase64(data)
+				pssh = append(pssh, data...)
+
+				resDrmSystems[i].Pssh = encode.BytesToBase64(pssh)
 				break
 			}
 			resDrmSystems[i].Kid = drmSystems[i].Kid
@@ -260,16 +261,11 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 func generateProtoBuf(keyId []byte, contentId []byte, provider string, trackType string) ([]byte, error) {
 
 	key_id := [][]byte{keyId}
-	algorithm_value := pb.WidevineCencHeader_AESCTR
-	policy := string("")
 
 	pssh := &pb.WidevineCencHeader{
-		Algorithm:           &algorithm_value,
-		KeyId:               key_id,
-		Provider:            &provider,
-		ContentId:           contentId,
-		TrackTypeDeprecated: &trackType,
-		Policy:              &policy}
+		KeyId:     key_id,
+		Provider:  &provider,
+		ContentId: contentId}
 
 	data, err := proto.Marshal(pssh)
 	if err != nil {
