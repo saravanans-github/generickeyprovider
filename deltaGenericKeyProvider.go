@@ -238,7 +238,7 @@ func setKeysOnMpxKeyDs(next http.Handler) http.Handler {
 
 		// Check if key exists; if it does, get the id else set it as ""
 		mpxKeyId := ""
-		if len(mpxKeyIds) != 0 && mpxKeyIds[0] == "" {
+		if len(mpxKeyIds) != 0 && mpxKeyIds[0] != "" {
 			mpxKeyId = mpxKeyIds[0]
 		}
 
@@ -292,15 +292,15 @@ func sendSpekeResponse(next http.Handler) http.Handler {
 		w.Header().Set("Speke-User-Agent", _SPEKE_UA)
 		log.Println("Writing response headers... DONE")
 
-		log.Println("Creating Static Speke XML body...")
+		log.Println("Creating Dynamic Speke XML body...")
 		response, err := buildDynamicSpekeResponse(requestInXML.Id, requestInXML.ContentKeyList, requestInXML.DRMSystemList)
 		if err != nil {
-			log.Printf("Creating Static Speke XML body... FAILED \n [%s]", err.Error())
+			log.Printf("Creating Dynamic Speke XML body... FAILED \n [%s]", err.Error())
 			message, status := middleware.GetErrorResponse(400, "Bad request. "+err.Error())
 			http.Error(w, message, status)
 			return
 		}
-		log.Println("Creating Static Speke XML body... DONE")
+		log.Println("Creating Dynamic Speke XML body... DONE")
 
 		log.Println("Writing response body...")
 		if _, err := w.Write(response); err != nil {
@@ -573,6 +573,7 @@ func postIntoMpxKeyDs(resolvedUrl string, mpxToken string, mpxAccountId string, 
 	//Put the key into KeyDS
 	log.Println("POST(TING) key into Key DS... ")
 	log.Println("	Formatting Key DS request body... ")
+	println(keyId)
 	mpxRequestBody, err := json.Marshal(MpxKeyDsType{mpxKeyId, contentId, contentId, mpxAccountId, "commonKey", keyId, key, len(key) / 2, "SD", "literal"})
 	if err != nil {
 		//TODO: ERROR HANDLING
@@ -582,6 +583,9 @@ func postIntoMpxKeyDs(resolvedUrl string, mpxToken string, mpxAccountId string, 
 	// Put the Key into KeyDS
 	url := resolvedUrl + "/data/Key?httpError=true&schema=1.2.1&token=" + mpxToken + "&form=cjson"
 	mpxRequest, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(mpxRequestBody))
+
+	dump, _ := httputil.DumpRequest(mpxRequest, true)
+	log.Printf("%s", dump)
 
 	client := http.Client{}
 	mpxResponse, err := client.Do(mpxRequest)
