@@ -238,7 +238,7 @@ func setKeysOnMpxKeyDs(next http.Handler) http.Handler {
 
 		// Check if key exists; if it does, get the id else set it as ""
 		mpxKeyId := ""
-		if mpxKeyIds[0] == "" {
+		if len(mpxKeyIds) != 0 && mpxKeyIds[0] == "" {
 			mpxKeyId = mpxKeyIds[0]
 		}
 
@@ -573,7 +573,7 @@ func postIntoMpxKeyDs(resolvedUrl string, mpxToken string, mpxAccountId string, 
 	//Put the key into KeyDS
 	log.Println("POST(TING) key into Key DS... ")
 	log.Println("	Formatting Key DS request body... ")
-	mpxRequestBody, err := json.Marshal(MpxKeyDsType{mpxKeyId, contentId, contentId, mpxAccountId, "commonKey", url.PathEscape(mpxAccountId), key, len(key), "SD", "literal"})
+	mpxRequestBody, err := json.Marshal(MpxKeyDsType{mpxKeyId, contentId, contentId, mpxAccountId, "commonKey", keyId, key, len(key) / 2, "SD", "literal"})
 	if err != nil {
 		//TODO: ERROR HANDLING
 	}
