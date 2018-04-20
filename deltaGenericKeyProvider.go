@@ -346,7 +346,7 @@ func buildDynamicSpekeResponse(id string, contentKeys []ContentKeyType, drmSyste
 				contentKeyInBin := make([][]byte, len(contentKeys))
 
 				for i, contentKey := range contentKeys {
-					contentKeyInBin[i] = encode.HexStringToBin(strings.Replace(contentKey.Kid, "-", "", -1))
+					contentKeyInBin[i] = encode.HexStringToBin(removeAllHypens(contentKey.Kid))
 				}
 
 				widevinePssh, err := generateWidevinePssh(contentKeyInBin, contentIdInBin, "widevine_test", "SD")
@@ -354,7 +354,7 @@ func buildDynamicSpekeResponse(id string, contentKeys []ContentKeyType, drmSyste
 					return
 				}
 
-				mp4Pssh, err := generateMp4Pssh(contentKeyInBin, strings.Replace(_WIDEVINE_SYSTEM_ID, "-", "", -1), widevinePssh)
+				mp4Pssh, err := generateMp4Pssh(contentKeyInBin, removeAllHypens(_WIDEVINE_SYSTEM_ID), widevinePssh)
 				if err != nil {
 					return
 				}
@@ -428,7 +428,7 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 					return
 				}
 
-				mp4Pssh, err := generateMp4Pssh(contentKeyInBin, strings.Replace(_WIDEVINE_SYSTEM_ID, "-", "", -1), widevinePssh)
+				mp4Pssh, err := generateMp4Pssh(contentKeyInBin, removeAllHypens(_WIDEVINE_SYSTEM_ID), widevinePssh)
 				if err != nil {
 					return
 				}
@@ -574,7 +574,7 @@ func postIntoMpxKeyDs(resolvedUrl string, mpxToken string, mpxAccountId string, 
 	log.Println("POST(TING) key into Key DS... ")
 	log.Println("	Formatting Key DS request body... ")
 	println(keyId)
-	mpxRequestBody, err := json.Marshal(MpxKeyDsType{mpxKeyId, contentId, contentId, mpxAccountId, "commonKey", keyId, key, len(key) / 2, "SD", "literal"})
+	mpxRequestBody, err := json.Marshal(MpxKeyDsType{mpxKeyId, contentId, contentId, mpxAccountId, "commonKey", removeAllHypens(keyId), key, len(key) / 2, "SD", "literal"})
 	if err != nil {
 		//TODO: ERROR HANDLING
 	}
@@ -654,4 +654,8 @@ func getMpxKeyIds(resolvedUrl string, mpxToken string, mpxAccountId string, cont
 	}
 
 	return keyIds, nil
+}
+
+func removeAllHypens(original string) string {
+	return strings.Replace(original, "-", "", -1)
 }
