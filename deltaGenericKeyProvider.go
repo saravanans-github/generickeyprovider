@@ -393,8 +393,8 @@ func buildStaticSpekeResponse(id string, contentKeys []ContentKeyType, drmSystem
 	log.Printf("length of content keys %d", len(contentKeys))
 	for i := 0; i < len(contentKeys); i++ {
 		resContentKeys[i].Kid = contentKeys[i].Kid
-		resContentKeys[i].Data = encode.BytesToBase64(encode.HexStringToBin(_KEY))
-		resContentKeys[i].ExplicitIV = encode.BytesToBase64(encode.HexStringToBin(_IV))
+		resContentKeys[i].Data = encode.BytesToBase64(encode.HexStringToBin(_key))
+		resContentKeys[i].ExplicitIV = encode.BytesToBase64(encode.HexStringToBin(_iv))
 	}
 
 	// Now we set DRM specific data statically
