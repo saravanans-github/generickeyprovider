@@ -1,0 +1,13 @@
+<cpix:CPIX id="abc123" xmlns:cpix="urn:dashif:org:cpix" xmlns:pskc="urn:ietf:params:xml:ns:keyprov:pskc" xmlns:speke="urn:aws:amazon:com:speke">
+	<cpix:ContentKeyList>
+		<cpix:ContentKey kid="98ee5596-cd3e-a20d-163a-e382420c6eff" explicitIV="OFj2IjCsPJFfMAxmQxLGPw=="></cpix:ContentKey>
+	</cpix:ContentKeyList>
+	<cpix:DRMSystemList>
+
+		<!-- Common encryption (Widevine)-->
+		<cpix:DRMSystem kid="98ee5596-cd3e-a20d-163a-e382420c6eff" systemId="edef8ba9-79d6-4ace-a3c8-27dcd51d21ed">
+			<cpix:PSSH></cpix:PSSH>
+		</cpix:DRMSystem>
+
+	</cpix:DRMSystemList>
+</cpix:CPIX>
