@@ -1,18 +1,18 @@
 package main
 
 import (
-	pb "WidevineCencHeader"
 	"encoding/xml"
 	"helper/encode"
 	"io/ioutil"
 	"log"
 	"middleware"
 	"net/http"
+	pb "widevineCencHeader"
 
 	"github.com/golang/protobuf/proto"
 )
 
-const _KEY = "a674a66870be1eba1fee7adb3f3dd37f"
+const _KEY = "69eaa802a6763af979e8d1940fb88392"
 const _IV = "1f408836a6e7c0295bbad005a71a5532"
 const _URI = "sdk://test123"
 const _SPEKE_UA = "ssaravanan_generickeyprovider"
